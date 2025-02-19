@@ -2,27 +2,28 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import { $ } from '../../../../../../base/browser/dom.js';
-import { Disposable } from '../../../../../../base/common/lifecycle.js';
-import { IObservable, constObservable, derived, derivedWithStore, observableValue } from '../../../../../../base/common/observable.js';
-import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { asCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
-import { ICodeEditor } from '../../../../../browser/editorBrowser.js';
-import { observableCodeEditor } from '../../../../../browser/observableCodeEditor.js';
-import { Point } from '../../../../../browser/point.js';
-import { LineSource, renderLines, RenderOptions } from '../../../../../browser/widget/diffEditor/components/diffEditorViewZones/renderLines.js';
-import { EditorOption } from '../../../../../common/config/editorOptions.js';
-import { LineRange } from '../../../../../common/core/lineRange.js';
-import { Position } from '../../../../../common/core/position.js';
-import { Range } from '../../../../../common/core/range.js';
-import { ILanguageService } from '../../../../../common/languages/language.js';
-import { LineTokens } from '../../../../../common/tokens/lineTokens.js';
-import { TokenArray } from '../../../../../common/tokens/tokenArray.js';
-import { GhostText, GhostTextPart } from '../../model/ghostText.js';
-import { GhostTextView } from '../ghostText/ghostTextView.js';
-import { IInlineEditsView } from './sideBySideDiff.js';
-import { getModifiedBorderColor, modifiedChangedLineBackgroundColor } from './theme.js';
-import { createRectangle, InlineEditTabAction, mapOutFalsy, n } from './utils.js';
+import { $, n } from '../../../../../../../base/browser/dom.js';
+import { Disposable } from '../../../../../../../base/common/lifecycle.js';
+import { constObservable, derived, derivedWithStore, IObservable, observableValue } from '../../../../../../../base/common/observable.js';
+import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
+import { asCssVariable } from '../../../../../../../platform/theme/common/colorUtils.js';
+import { ICodeEditor } from '../../../../../../browser/editorBrowser.js';
+import { observableCodeEditor } from '../../../../../../browser/observableCodeEditor.js';
+import { Point } from '../../../../../../browser/point.js';
+import { LineSource, renderLines, RenderOptions } from '../../../../../../browser/widget/diffEditor/components/diffEditorViewZones/renderLines.js';
+import { EditorOption } from '../../../../../../common/config/editorOptions.js';
+import { LineRange } from '../../../../../../common/core/lineRange.js';
+import { Position } from '../../../../../../common/core/position.js';
+import { Range } from '../../../../../../common/core/range.js';
+import { ILanguageService } from '../../../../../../common/languages/language.js';
+import { LineTokens } from '../../../../../../common/tokens/lineTokens.js';
+import { TokenArray } from '../../../../../../common/tokens/tokenArray.js';
+import { InlineDecoration, InlineDecorationType } from '../../../../../../common/viewModel.js';
+import { GhostText, GhostTextPart } from '../../../model/ghostText.js';
+import { GhostTextView } from '../../ghostText/ghostTextView.js';
+import { IInlineEditsView, IInlineEditsViewHost } from '../inlineEditsViewInterface.js';
+import { getModifiedBorderColor, modifiedChangedLineBackgroundColor } from '../theme.js';
+import { createRectangle, getPrefixTrim, mapOutFalsy } from '../utils/utils.js';
 
 export class InlineEditsInsertionView extends Disposable implements IInlineEditsView {
 	private readonly _editorObs = observableCodeEditor(this._editor);
@@ -42,10 +43,37 @@ export class InlineEditsInsertionView extends Disposable implements IInlineEdits
 		return { lineNumber: state.lineNumber, column: state.startColumn, text: state.text };
 	});
 
+	private readonly _maxPrefixTrim = derived(reader => {
+		const state = this._state.read(reader);
+		if (!state) {
+			return { prefixLeftOffset: 0, prefixTrim: 0 };
+
+		}
+		const textModel = this._editor.getModel()!;
+		const eol = textModel.getEOL();
+		const startsWithEol = state.text.startsWith(eol);
+		const originalRange = new LineRange(state.lineNumber, state.lineNumber + (startsWithEol ? 0 : 1));
+		const modifiedLines = state.text.split(eol).splice(startsWithEol ? 0 : 1);
+
+		return getPrefixTrim([], originalRange, modifiedLines, this._editor);
+	});
+
 	private readonly _ghostText = derived<GhostText | undefined>(reader => {
 		const state = this._state.read(reader);
+		const prefixTrim = this._maxPrefixTrim.read(reader);
 		if (!state) { return undefined; }
-		return new GhostText(state.lineNumber, [new GhostTextPart(state.column, state.text, false)]);
+
+		const textModel = this._editor.getModel()!;
+		const eol = textModel.getEOL();
+		const modifiedLines = state.text.split(eol);
+
+		const inlineDecorations = modifiedLines.map((line, i) => new InlineDecoration(
+			new Range(i + 1, i === 0 ? 1 : prefixTrim.prefixTrim + 1, i + 1, line.length + 1),
+			'modified-background',
+			InlineDecorationType.Regular
+		));
+
+		return new GhostText(state.lineNumber, [new GhostTextPart(state.column, state.text, false, inlineDecorations)]);
 	});
 
 	protected readonly _ghostTextView = this._register(this._instantiationService.createInstance(GhostTextView,
@@ -67,7 +95,7 @@ export class InlineEditsInsertionView extends Disposable implements IInlineEdits
 			startColumn: number;
 			text: string;
 		} | undefined>,
-		private readonly _tabAction: IObservable<InlineEditTabAction>,
+		private readonly _host: IInlineEditsViewHost,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ILanguageService private readonly _languageService: ILanguageService,
 	) {
@@ -165,7 +193,8 @@ export class InlineEditsInsertionView extends Disposable implements IInlineEdits
 		const horizontalScrollOffset = this._editorObs.scrollLeft.read(reader);
 
 		const left = editorLayout.contentLeft + this._editorMaxContentWidthInRange.read(reader) - horizontalScrollOffset;
-		const codeLeft = editorLayout.contentLeft;
+		const prefixTrim = this._maxPrefixTrim.read(reader);
+		const codeLeft = editorLayout.contentLeft + (prefixTrim?.prefixLeftOffset ?? 0 /* fix due to observable bug? */);
 		if (left <= codeLeft) {
 			return null;
 		}
@@ -213,7 +242,7 @@ export class InlineEditsInsertionView extends Disposable implements IInlineEdits
 			{ hideLeft: layoutInfo.horizontalScrollOffset !== 0 }
 		);
 
-		const modifiedBorderColor = getModifiedBorderColor(this._tabAction).read(reader);
+		const modifiedBorderColor = getModifiedBorderColor(this._host.tabAction).read(reader);
 
 		return [
 			n.svgElem('path', {
