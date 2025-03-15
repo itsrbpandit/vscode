@@ -5,11 +5,20 @@
 
 export interface IMcpConfiguration {
 	inputs: unknown[];
-	servers: Record<string, IMcpConfigurationServer>;
+	/** @deprecated Only for rough cross-compat with other formats */
+	mcpServers?: Record<string, IMcpConfigurationStdio>;
+	servers: Record<string, IMcpConfigurationStdio | IMcpConfigurationSSE>;
 }
 
-export interface IMcpConfigurationServer {
+export interface IMcpConfigurationStdio {
+	type?: 'stdio';
 	command: string;
 	args?: readonly string[];
 	env?: Record<string, string | number | null>;
+}
+
+export interface IMcpConfigurationSSE {
+	type: 'sse';
+	url: string;
+	headers?: Record<string, string>;
 }
