@@ -174,7 +174,7 @@ export class Extension implements IExtension {
 		if (this.resourceExtension) {
 			return this.resourceExtension.identifier;
 		}
-		return this.local!.identifier;
+		return this.local?.identifier ?? { id: '' };
 	}
 
 	get uuid(): string | undefined {
@@ -1873,7 +1873,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				count: infos.length,
 			});
 			this.logService.trace(`Checking updates for extensions`, infos.map(e => e.id).join(', '));
-			const galleryExtensions = await this.galleryService.getExtensions(infos, { targetPlatform, compatible: true, productVersion: this.getProductVersion(), preferResourceApi: true }, CancellationToken.None);
+			const galleryExtensions = await this.galleryService.getExtensions(infos, { targetPlatform, compatible: true, productVersion: this.getProductVersion(), updateCheck: true }, CancellationToken.None);
 			if (galleryExtensions.length) {
 				await this.syncInstalledExtensionsWithGallery(galleryExtensions);
 			}
@@ -2104,7 +2104,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		}
 
 		if (autoUpdateValue === 'onlyEnabledExtensions') {
-			return this.extensionEnablementService.isEnabledEnablementState(extension.enablementState);
+			return extension.enablementState !== EnablementState.DisabledGlobally && extension.enablementState !== EnablementState.DisabledWorkspace;
 		}
 
 		return false;

@@ -9,7 +9,7 @@ import { MenuRegistry, MenuId, registerAction2 } from '../../platform/actions/co
 import { IConfigurationRegistry, Extensions as ConfigurationExtensions, ConfigurationScope } from '../../platform/configuration/common/configurationRegistry.js';
 import { KeyMod, KeyCode } from '../../base/common/keyCodes.js';
 import { isLinux, isMacintosh, isWindows } from '../../base/common/platform.js';
-import { ConfigureRuntimeArgumentsAction, ToggleDevToolsAction, ReloadWindowWithExtensionsDisabledAction, OpenUserDataFolderAction, ShowGPUInfoAction } from './actions/developerActions.js';
+import { ConfigureRuntimeArgumentsAction, ToggleDevToolsAction, ReloadWindowWithExtensionsDisabledAction, OpenUserDataFolderAction, ShowGPUInfoAction, StopTracing } from './actions/developerActions.js';
 import { ZoomResetAction, ZoomOutAction, ZoomInAction, CloseWindowAction, SwitchWindowAction, QuickSwitchWindowAction, NewWindowTabHandler, ShowPreviousWindowTabHandler, ShowNextWindowTabHandler, MoveWindowTabToNewWindowHandler, MergeWindowTabsHandlerHandler, ToggleWindowTabsBarHandler, ToggleWindowAlwaysOnTopAction, DisableWindowAlwaysOnTopAction, EnableWindowAlwaysOnTopAction } from './actions/windowActions.js';
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../platform/keybinding/common/keybindingsRegistry.js';
@@ -30,7 +30,6 @@ import { applicationConfigurationNodeBase, securityConfigurationNodeBase } from 
 import { MAX_ZOOM_LEVEL, MIN_ZOOM_LEVEL } from '../../platform/window/electron-sandbox/window.js';
 import { DefaultAccountManagementContribution } from '../services/accounts/common/defaultAccount.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../common/contributions.js';
-import product from '../../platform/product/common/product.js';
 
 // Actions
 (function registerActions(): void {
@@ -115,6 +114,7 @@ import product from '../../platform/product/common/product.js';
 	registerAction2(ToggleDevToolsAction);
 	registerAction2(OpenUserDataFolderAction);
 	registerAction2(ShowGPUInfoAction);
+	registerAction2(StopTracing);
 })();
 
 // Menu
@@ -148,12 +148,7 @@ import product from '../../platform/product/common/product.js';
 				'included': !isWindows,
 				'scope': ConfigurationScope.APPLICATION,
 				'markdownDescription': localize('application.shellEnvironmentResolutionTimeout', "Controls the timeout in seconds before giving up resolving the shell environment when the application is not already launched from a terminal. See our [documentation](https://go.microsoft.com/fwlink/?linkid=2149667) for more information.")
-			},
-			'application.useNewProcessExplorer': {
-				'type': 'boolean',
-				'default': product.quality !== 'stable', // TODO@bpasero decide on a default
-				'description': localize('useNewProcessExplorer', "Controls whether a the process explorer opens in a floating window."),
-			},
+			}
 		}
 	});
 
@@ -272,7 +267,7 @@ import product from '../../platform/product/common/product.js';
 				'enum': ['native', 'custom'],
 				'default': 'native',
 				'scope': ConfigurationScope.APPLICATION,
-				'description': localize('dialogStyle', "Adjust the appearance of dialog windows.")
+				'description': localize('dialogStyle', "Adjust the appearance of dialogs to be native by the OS or custom.")
 			},
 			'window.nativeTabs': {
 				'type': 'boolean',
@@ -429,6 +424,12 @@ import product from '../../platform/product/common/product.js';
 		schema.properties!['password-store'] = {
 			type: 'string',
 			description: localize('argv.passwordStore', "Configures the backend used to store secrets on Linux. This argument is ignored on Windows & macOS.")
+		};
+	}
+	if (isWindows) {
+		schema.properties!['enable-rdp-display-tracking'] = {
+			type: 'boolean',
+			description: localize('argv.enableRDPDisplayTracking', "Ensures that maximized windows gets restored to correct display during RDP reconnection.")
 		};
 	}
 
