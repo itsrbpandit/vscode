@@ -3,9 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ITextModel } from '../../model.js';
-import { VSBuffer } from '../../../../base/common/buffer.js';
-import { assert, assertNever } from '../../../../base/common/assert.js';
+import { assertNever } from '../../../../base/common/assert.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { ObservableDisposable } from '../../../../base/common/observableDisposable.js';
 import { newWriteableStream, WriteableStream, ReadableStream } from '../../../../base/common/stream.js';
@@ -28,7 +26,7 @@ export class ObjectStream<T extends object> extends ObservableDisposable impleme
 	 * Interval reference that is used to periodically send
 	 * objects to the stream in the background.
 	 */
-	private timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+	private timeoutHandle: Timeout | undefined;
 
 	constructor(
 		private readonly data: Generator<T, undefined>,
@@ -56,26 +54,17 @@ export class ObjectStream<T extends object> extends ObservableDisposable impleme
 	public send(
 		stopAfterFirstSend: boolean = false,
 	): void {
-		if (this.cancellationToken?.isCancellationRequested) {
+		// this method can be called asynchronously by the `setTimeout` utility below, hence
+		// the state of the cancellation token or the stream itself might have changed by that time
+		if (this.cancellationToken?.isCancellationRequested || this.ended) {
 			this.end();
 
 			return;
 		}
 
-		assert(
-			this.ended === false,
-			'Cannot send on already ended stream.',
-		);
-
 		this.sendData()
 			.then(() => {
-				if (this.cancellationToken?.isCancellationRequested) {
-					this.end();
-
-					return;
-				}
-
-				if (this.ended) {
+				if (this.cancellationToken?.isCancellationRequested || this.ended) {
 					this.end();
 
 					return;
@@ -103,7 +92,7 @@ export class ObjectStream<T extends object> extends ObservableDisposable impleme
 		}
 
 		clearTimeout(this.timeoutHandle);
-		delete this.timeoutHandle;
+		this.timeoutHandle = undefined;
 
 		return this;
 	}
@@ -220,16 +209,6 @@ export class ObjectStream<T extends object> extends ObservableDisposable impleme
 	): ObjectStream<T> {
 		return new ObjectStream(arrayToGenerator(array), cancellationToken);
 	}
-
-	/**
-	 * Create new instance of the stream from a provided text model.
-	 */
-	public static fromTextModel(
-		model: ITextModel,
-		cancellationToken?: CancellationToken,
-	): ObjectStream<VSBuffer> {
-		return new ObjectStream(modelToGenerator(model), cancellationToken);
-	}
 }
 
 /**
@@ -239,33 +218,6 @@ export const arrayToGenerator = <T extends NonNullable<unknown>>(array: T[]): Ge
 	return (function* (): Generator<T, undefined> {
 		for (const item of array) {
 			yield item;
-		}
-	})();
-};
-
-/**
- * Create a generator out of a provided text model.
- */
-export const modelToGenerator = (model: ITextModel): Generator<VSBuffer, undefined> => {
-	return (function* (): Generator<VSBuffer, undefined> {
-		const totalLines = model.getLineCount();
-		let currentLine = 1;
-
-		while (currentLine <= totalLines) {
-			if (model.isDisposed()) {
-				return undefined;
-			}
-
-			yield VSBuffer.fromString(
-				model.getLineContent(currentLine),
-			);
-			if (currentLine !== totalLines) {
-				yield VSBuffer.fromString(
-					model.getEOL(),
-				);
-			}
-
-			currentLine++;
 		}
 	})();
 };

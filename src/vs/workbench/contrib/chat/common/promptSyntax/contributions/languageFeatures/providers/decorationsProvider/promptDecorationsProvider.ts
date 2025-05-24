@@ -12,8 +12,8 @@ import { Position } from '../../../../../../../../../editor/common/core/position
 import { BaseToken } from '../../../../../../../../../editor/common/codecs/baseToken.js';
 import { ProviderInstanceManagerBase, TProviderClass } from '../providerInstanceManagerBase.js';
 import { registerThemingParticipant } from '../../../../../../../../../platform/theme/common/themeService.js';
-import { FrontMatterHeader } from '../../../../../../../../../editor/common/codecs/markdownExtensionsCodec/tokens/frontMatterHeader.js';
 import { DecorationBase, ReactiveDecorationBase, type TDecorationClass, type TChangedDecorator } from './decorations/utils/index.js';
+import { FrontMatterHeader } from '../../../../../../../../../editor/common/codecs/markdownExtensionsCodec/tokens/frontMatterHeader.js';
 
 /**
  * Prompt tokens that are decorated by this provider.
@@ -50,7 +50,7 @@ export class PromptDecorator extends ProviderInstanceBase {
 	): this {
 		// by the time the promise above completes, either this object
 		// or the text model might be already has been disposed
-		if (this.disposed || this.model.isDisposed()) {
+		if (this.isDisposed || this.model.isDisposed()) {
 			return this;
 		}
 
@@ -167,7 +167,7 @@ export class PromptDecorator extends ProviderInstanceBase {
 	}
 
 	public override dispose(): void {
-		if (this.disposed) {
+		if (this.isDisposed) {
 			return;
 		}
 

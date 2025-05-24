@@ -13,6 +13,7 @@ import { IMarkdownRenderResult, MarkdownRenderer, openLinkFromMarkdown } from '.
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { FocusMode } from '../../../../../platform/native/common/native.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
@@ -108,7 +109,7 @@ abstract class BaseChatConfirmationWidget extends Disposable {
 	protected readonly markdownRenderer: MarkdownRenderer;
 
 	constructor(
-		title: string,
+		title: string | IMarkdownString,
 		subtitle: string | IMarkdownString | undefined,
 		buttons: IChatConfirmationButton[],
 		@IInstantiationService protected readonly instantiationService: IInstantiationService,
@@ -121,7 +122,7 @@ abstract class BaseChatConfirmationWidget extends Disposable {
 		const elements = dom.h('.chat-confirmation-widget@root', [
 			dom.h('.chat-confirmation-widget-title@title'),
 			dom.h('.chat-confirmation-widget-message@message'),
-			dom.h('.chat-confirmation-buttons-container@buttonsContainer'),
+			dom.h('.chat-buttons-container@buttonsContainer'),
 		]);
 		this._domNode = elements.root;
 		this.markdownRenderer = this.instantiationService.createInstance(MarkdownRenderer, {});
@@ -173,7 +174,7 @@ abstract class BaseChatConfirmationWidget extends Disposable {
 		if (this._configurationService.getValue<boolean>('chat.focusWindowOnConfirmation')) {
 			const targetWindow = dom.getWindow(listContainer);
 			if (!targetWindow.document.hasFocus()) {
-				this._hostService.focus(targetWindow, { force: true /* Application may not be active */ });
+				this._hostService.focus(targetWindow, { mode: FocusMode.Notify });
 			}
 		}
 	}
@@ -181,7 +182,7 @@ abstract class BaseChatConfirmationWidget extends Disposable {
 
 export class ChatConfirmationWidget extends BaseChatConfirmationWidget {
 	constructor(
-		title: string,
+		title: string | IMarkdownString,
 		subtitle: string | IMarkdownString | undefined,
 		private readonly message: string | IMarkdownString,
 		buttons: IChatConfirmationButton[],
@@ -203,7 +204,7 @@ export class ChatConfirmationWidget extends BaseChatConfirmationWidget {
 
 export class ChatCustomConfirmationWidget extends BaseChatConfirmationWidget {
 	constructor(
-		title: string,
+		title: string | IMarkdownString,
 		subtitle: string | IMarkdownString | undefined,
 		messageElement: HTMLElement,
 		buttons: IChatConfirmationButton[],
